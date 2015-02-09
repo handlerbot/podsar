@@ -2,6 +2,8 @@ package lib
 
 import (
 	sql "database/sql"
+	"fmt"
+	"path/filepath"
 )
 
 type scannableRow interface {
@@ -18,4 +20,26 @@ func makeFeedFromRow(row scannableRow) (*Feed, error) {
 		return nil, err
 	}
 	return &Feed{id, ourName, feedName, uri, active, dirName.String, rename}, nil
+}
+
+func AssembleDest(srcUrl string, title string, dirPrefix string, feed *Feed) (string, string) {
+	urlFilename := filepath.Base(srcUrl) // eeek
+
+	var feedDir, destFilename string
+
+	if feed.DirName != "" {
+		feedDir = feed.DirName
+	} else {
+		feedDir = feed.OurName
+	}
+
+	if feed.RenameEpisodesToTitle {
+		destFilename = title + ".mp3"
+	} else {
+		destFilename = urlFilename
+	}
+
+	p := fmt.Sprintf("%s/%s", dirPrefix, feedDir)
+	f := fmt.Sprintf("%s/%s/%s", dirPrefix, feedDir, destFilename)
+	return p, f
 }

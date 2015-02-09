@@ -16,11 +16,11 @@ type SeenEpisodesCache struct {
 }
 
 func NewSeenEpisodesCache(db *lib.PodsarDb) *SeenEpisodesCache {
-	c := new(SeenEpisodesCache)
+	c := SeenEpisodesCache{}
 	c.db = db
 	c.cache = make(map[int]map[string]int)
 
-	return c
+	return &c
 }
 
 func (c *SeenEpisodesCache) Flusher(trigger chan os.Signal) {
