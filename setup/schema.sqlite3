@@ -1,0 +1,15 @@
+CREATE TABLE feeds(
+	id INTEGER PRIMARY KEY NOT NULL,
+	our_name TEXT UNIQUE NOT NULL,
+	feed_name TEXT NOT NULL,
+	uri TEXT NOT NULL,
+	active INTEGER NOT NULL,
+	dir_name TEXT UNIQUE,
+	rename_episodes_to_title INTEGER NOT NULL
+);
+
+CREATE TABLE episodes(
+	feed_id INTEGER NOT NULL,
+	guid TEXT NOT NULL,
+	FOREIGN KEY(feed_id) REFERENCES feeds(id)
+);
