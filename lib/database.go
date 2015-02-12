@@ -71,6 +71,15 @@ func (p *PodsarDb) GetEpisodes(feedId int) ([]*Episode, error) {
 	return episodes, nil
 }
 
+func (p *PodsarDb) GetEpisodeCount(feedId int) (int, error) {
+	row := p.db.QueryRow("SELECT count(*) FROM episodes WHERE feed_id = ?;", feedId)
+	var c int
+	if err := row.Scan(&c); err != nil {
+		return -1, err
+	}
+	return c, nil
+}
+
 func (p *PodsarDb) SaveEpisode(feedId int, guid string) error {
 	_, err := p.db.Exec("INSERT INTO episodes(feed_id, guid) VALUES (?, ?);", feedId, guid)
 	return err
