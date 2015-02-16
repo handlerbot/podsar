@@ -36,6 +36,7 @@ func retrieve(db *lib.PodsarDb, ch chan *retrieveRequest, cache *SeenEpisodesCac
 						fmt.Printf("Error creating temporary file in %s: %s\n", tempDir, err)
 						continue
 					}
+					defer tempFile.Close()
 
 					destDir, destFilepath := lib.AssembleDest(enclosure.Url, req.entry.Title, finalDir, feed)
 					if err := os.MkdirAll(destDir, 0755); err != nil {
@@ -58,23 +59,23 @@ func retrieve(db *lib.PodsarDb, ch chan *retrieveRequest, cache *SeenEpisodesCac
 						continue
 					}
 
-					tempFile.Close()
-
 					if err := os.Rename(tempFile.Name(), destFilepath); err != nil {
 						fmt.Printf("Error renaming \"%s\" to \"%s\": %s", tempFile.Name(), destFilepath, err)
 						continue
 					}
 
-					if err := db.SaveEpisode(req.feedId, *req.entry.Guid); err != nil {
-						fmt.Printf("Error saving episode \"%s\" for feed \"%s\"\n", *req.entry.Guid, feed.OurName)
-						continue
-					}
-
-					if err := cache.MarkSeen(req.feedId, *req.entry.Guid); err != nil {
-						fmt.Printf("Error marking as read episode \"%s\" for feed \"%s\"\n", *req.entry.Guid, feed.OurName)
-						continue
-					}
+					break
 				}
+			}
+
+			if err := db.SaveEpisode(req.feedId, *req.entry.Guid); err != nil {
+				fmt.Printf("Error saving episode \"%s\" for feed \"%s\"\n", *req.entry.Guid, feed.OurName)
+				continue
+			}
+
+			if err := cache.MarkSeen(req.feedId, *req.entry.Guid); err != nil {
+				fmt.Printf("Error marking as read episode \"%s\" for feed \"%s\"\n", *req.entry.Guid, feed.OurName)
+				continue
 			}
 		}
 	}
