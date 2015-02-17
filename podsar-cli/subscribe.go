@@ -11,7 +11,7 @@ import (
 
 type episodeHandler struct {
 	channel *rss.Channel
-	items []*rss.Item
+	items   []*rss.Item
 }
 
 func (m *episodeHandler) ProcessItems(scanner *rss.Feed, rssChannel *rss.Channel, rssEntries []*rss.Item) {
@@ -62,7 +62,7 @@ SamplePrintLoop:
 		for c := 0; c < *limit && i < len(handler.items); i++ {
 			if e, ok := findAudioEnclosure(handler.items[i]); ok {
 				_, fp := lib.AssembleDest(e.Url, handler.items[i].Title, "", feed)
-				fmt.Printf("%d) \"%s\" => filename \"%s\"\n", c + 1, handler.items[i].Title, fp)
+				fmt.Printf("%d) \"%s\" => filename \"%s\"\n", c+1, handler.items[i].Title, fp)
 				c++
 			} else {
 				ignore = append(ignore, item)

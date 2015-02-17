@@ -16,7 +16,7 @@ var (
 	subscribe = kingpin.Command("sub", "subscribe to a podcast")
 	dirName   = subscribe.Flag("dir", "override directory name to download podcast to, inside podcast directory").String()
 	rename    = subscribe.Flag("rename-episodes", "override filename from the episode title, rather than whatever the feed gives us").Bool()
-	limit	  = subscribe.Flag("episode-limit", "download this many episodes from the podcast when subscribing; 0 means none, -1 means all").Default("3").Int()
+	limit     = subscribe.Flag("episode-limit", "download this many episodes from the podcast when subscribing; 0 means none, -1 means all").Default("3").Int()
 	ourName   = subscribe.Arg("name", "short name for this podcast").Required().String()
 	uri       = subscribe.Arg("uri", "URI for podcast feed").Required().URL()
 )
