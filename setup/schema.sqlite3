@@ -10,6 +10,7 @@ CREATE TABLE feeds(
 
 CREATE TABLE episodes(
 	feed_id INTEGER NOT NULL,
+	name TEXT NOT NULL,
 	guid TEXT NOT NULL,
 	FOREIGN KEY(feed_id) REFERENCES feeds(id)
 );

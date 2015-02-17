@@ -2,7 +2,6 @@ package lib
 
 import (
 	sql "database/sql"
-	"fmt"
 	"path/filepath"
 )
 
@@ -39,7 +38,15 @@ func AssembleDest(srcUrl string, title string, dirPrefix string, feed *Feed) (st
 		destFilename = urlFilename
 	}
 
-	p := fmt.Sprintf("%s/%s", dirPrefix, feedDir)
-	f := fmt.Sprintf("%s/%s/%s", dirPrefix, feedDir, destFilename)
+	var p, f string
+
+	if len(dirPrefix) > 0 {
+		p = filepath.Join(dirPrefix, feedDir)
+	} else {
+		p = feedDir
+	}
+
+	f = filepath.Join(p, destFilename)
+
 	return p, f
 }
