@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"path/filepath"
+	"strconv"
 
 	rss "github.com/jteeuwen/go-pkg-rss"
 
@@ -36,40 +38,63 @@ func subscribeCmd() {
 		log.Fatalf("Error fetching feed %s: %s\n", uri, err)
 	}
 
-	feed := &lib.Feed{0, *ourName, handler.channel.Title, (*(*uri)).String(), false, *dirName, *rename}
-	ignore := make([]*rss.Item, 0)
-
-	fmt.Printf("### Podcast: \"%s\" (%d entries)\n### Description: \"%s\"\n", handler.channel.Title, len(handler.items), handler.channel.Description)
-
 	if *limit < 0 {
 		*limit = len(handler.items)
 	}
 
-SamplePrintLoop:
+	feed := &lib.Feed{0, *ourName, handler.channel.Title, (*(*uri)).String(), false, *dirName, *rename}
+	ignore := make([]*rss.Item, 0)
+
+	fmt.Printf("### Podcast: \"%s\" [%s]\n### Description: \"%s\"\n", handler.channel.Title, feed.OurName, handler.channel.Description)
+
 	for _, item := range handler.items {
 		if e, ok := findAudioEnclosure(item); ok {
 			_, fp := lib.AssembleDest(e.Url, item.Title, "", feed)
 			fmt.Printf("### Example downloaded filename: \"%s\"\n", fp)
-			break SamplePrintLoop
+			break
 		}
+	}
+
+	fmt.Printf("\n### Found %d entries:\n", len(handler.items))
+	maxlen := 0
+	lines := make([][2]string, 0)
+	for _, item := range handler.items {
+		if len(item.Title)+2 > maxlen {
+			maxlen = len(item.Title) + 2
+		}
+		pubDate := "unknown/unparseable publication date"
+		if t, err := item.ParsedPubDate(); err == nil {
+			pubDate = t.Format("2006-01-02 at 15:04 AM -0700")
+		}
+		lines = append(lines, [2]string{"\"" + item.Title + "\"", pubDate})
+	}
+	iWidth := len(strconv.Itoa(len(lines)))
+	for i, line := range lines {
+		fmt.Printf("%[1]*d) %-[3]*s  (published %s)\n", iWidth, i+1, maxlen, line[0], line[1])
 	}
 
 	if *limit > 0 {
 		fmt.Printf("\n### Will download the following entries:\n")
-
-		var i int
-		var item *rss.Item
+		i, maxlen := 0, 0
+		lines := make([][2]string, 0)
 		for c := 0; c < *limit && i < len(handler.items); i++ {
 			if e, ok := findAudioEnclosure(handler.items[i]); ok {
+				if len(handler.items[i].Title) > maxlen {
+					maxlen = len(handler.items[i].Title) + 2
+				}
 				_, fp := lib.AssembleDest(e.Url, handler.items[i].Title, "", feed)
-				fmt.Printf("%d) \"%s\" => filename \"%s\"\n", c+1, handler.items[i].Title, fp)
+				lines = append(lines, [2]string{"\"" + handler.items[i].Title + "\"", fp})
 				c++
 			} else {
-				ignore = append(ignore, item)
+				ignore = append(ignore, handler.items[i])
 			}
 		}
 		if i < len(handler.items) {
 			ignore = append(ignore, handler.items[i:]...)
+		}
+		iWidth := len(strconv.Itoa(len(lines)))
+		for i, line := range lines {
+			fmt.Printf("%[1]*d) %-[3]*s  => file \"%s\"\n", iWidth, i+1, maxlen, line[0], filepath.Join("<podcast root>", line[1]))
 		}
 		fmt.Println()
 	} else {
