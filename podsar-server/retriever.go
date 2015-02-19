@@ -19,6 +19,19 @@ type retrieveRequest struct {
 	entry  *rss.Item
 }
 
+func markDone(db *lib.PodsarDb, cache *SeenEpisodesCache, f *lib.Feed, req *retrieveRequest) bool {
+	t, _ := req.entry.ParsedPubDate()
+	if err := db.PutEpisode(req.feedId, req.entry.Title, *req.entry.Guid, t.Unix()); err != nil {
+		fmt.Printf("Error saving episode \"%s\" for feed \"%s\"\n", req.entry.Title, f.OurName)
+		return false
+	}
+	if err := cache.MarkSeen(req.feedId, *req.entry.Guid); err != nil {
+		fmt.Printf("Error marking as read episode \"%s\" for feed \"%s\"\n", req.entry.Title, f.OurName)
+		return false
+	}
+	return true
+}
+
 func retrieve(db *lib.PodsarDb, ch chan *retrieveRequest, cache *SeenEpisodesCache, finalDir string, tempDir string, bwlimit int64, quit chan struct{}, wg *sync.WaitGroup) {
 	wg.Add(1)
 	defer wg.Done()
@@ -29,19 +42,23 @@ func retrieve(db *lib.PodsarDb, ch chan *retrieveRequest, cache *SeenEpisodesCac
 			return
 		case req := <-ch:
 			feed, _ := db.GetFeed(req.feedId)
+			found := false
+
 			for _, enclosure := range req.entry.Enclosures {
 				if enclosure.Type == "audio/mpeg" {
+					found = true
+
 					tempFile, err := ioutil.TempFile(tempDir, "")
 					if err != nil {
 						fmt.Printf("Error creating temporary file in %s: %s\n", tempDir, err)
-						continue
+						break
 					}
 					defer tempFile.Close()
 
 					destDir, destFilepath := lib.AssembleDest(enclosure.Url, req.entry.Title, finalDir, feed)
 					if err := os.MkdirAll(destDir, 0755); err != nil {
 						fmt.Printf("Error making destination directory \"%s\": %s\n", destDir, err)
-						continue
+						break
 					}
 
 					fmt.Println(enclosure.Url, tempFile.Name(), destDir, destFilepath)
@@ -49,33 +66,28 @@ func retrieve(db *lib.PodsarDb, ch chan *retrieveRequest, cache *SeenEpisodesCac
 					resp, err := http.Get(enclosure.Url)
 					if err != nil {
 						fmt.Printf("Error retrieving podcast URL \"%s\": %s\n", enclosure.Url, err)
-						continue
+						break
 					}
 					defer resp.Body.Close()
 
 					_, err = io.Copy(tempFile, flowrate.NewReader(resp.Body, bwlimit))
 					if err != nil {
 						fmt.Printf("Error saving podcast URL \"%s\" to temporary file \"%s\": %s", enclosure.Url, tempFile.Name(), err)
-						continue
+						break
 					}
 
 					if err := os.Rename(tempFile.Name(), destFilepath); err != nil {
 						fmt.Printf("Error renaming \"%s\" to \"%s\": %s", tempFile.Name(), destFilepath, err)
-						continue
+						break
 					}
 
+					_ = markDone(db, cache, feed, req)
 					break
 				}
 			}
 
-			if err := db.SaveEpisode(req.feedId, *req.entry.Guid); err != nil {
-				fmt.Printf("Error saving episode \"%s\" for feed \"%s\"\n", *req.entry.Guid, feed.OurName)
-				continue
-			}
-
-			if err := cache.MarkSeen(req.feedId, *req.entry.Guid); err != nil {
-				fmt.Printf("Error marking as read episode \"%s\" for feed \"%s\"\n", *req.entry.Guid, feed.OurName)
-				continue
+			if !found {
+				_ = markDone(db, cache, feed, req)
 			}
 		}
 	}

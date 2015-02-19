@@ -30,7 +30,7 @@ func findAudioEnclosure(item *rss.Item) (*rss.Enclosure, bool) {
 	return nil, false
 }
 
-func subscribeCmd() {
+func subscribeCmd(db *lib.PodsarDb) {
 	handler := episodeHandler{}
 	scanner := rss.NewWithHandlers(15, false, nil, &handler)
 
@@ -102,4 +102,27 @@ func subscribeCmd() {
 	}
 
 	fmt.Printf("### Will mark %d entries as already seen\n", len(ignore))
+
+	if *dryRun {
+		return
+	}
+
+	id, err := db.PutFeed(feed)
+	if err != nil {
+		log.Fatal("Error saving feed:", err)
+	}
+
+	episodes := make([]*lib.Episode, 0)
+	for _, i := range ignore {
+		t, _ := i.ParsedPubDate() // If we can't parse the publication date, default zero-value for time.Time is fine
+		episodes = append(episodes, &lib.Episode{id, i.Title, *i.Guid, t})
+	}
+
+	if err := db.PutEpisodes(episodes); err != nil {
+		log.Fatal("Error saving ignored episodes:", err)
+	}
+
+	if err := db.PutFeedState(id, true); err != nil {
+		log.Fatal("Error unpausing feed after creation:", err)
+	}
 }

@@ -14,6 +14,7 @@ var (
 	list = kingpin.Command("list", "list all podcasts")
 
 	subscribe = kingpin.Command("sub", "subscribe to a podcast")
+	dryRun    = subscribe.Flag("dry-run", "if set, don't write anything to the database, just print").Bool()
 	dirName   = subscribe.Flag("dir", "override directory name to download podcast to, inside podcast directory").String()
 	rename    = subscribe.Flag("rename-episodes", "override filename from the episode title, rather than whatever the feed gives us").Bool()
 	limit     = subscribe.Flag("episode-limit", "download this many episodes from the podcast when subscribing; 0 means none, -1 means all").Default("3").Int()
@@ -34,6 +35,6 @@ func main() {
 	case "list":
 		listCmd(db)
 	case "sub":
-		subscribeCmd()
+		subscribeCmd(db)
 	}
 }

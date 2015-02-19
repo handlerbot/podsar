@@ -1,7 +1,14 @@
 package lib
 
+import (
+	"time"
+)
+
 type Episode struct {
-	Guid string
+	FeedId  int
+	Title   string
+	Guid    string
+	PubDate time.Time
 }
 
 type Feed struct {
