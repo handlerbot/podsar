@@ -20,6 +20,15 @@ var (
 	limit     = subscribe.Flag("episode-limit", "download this many episodes from the podcast when subscribing; 0 means none, -1 means all").Default("3").Int()
 	ourName   = subscribe.Arg("name", "short name for this podcast").Required().String()
 	uri       = subscribe.Arg("uri", "URI for podcast feed").Required().URL()
+
+	unsub = kingpin.Command("unsub", "unsubscribe from a podcast")
+	unsubName = unsub.Arg("name", "short name of the podcast to unsubscribe from").Required().String()
+
+	pause = kingpin.Command("pause", "pause downloading of a podcast")
+	pauseName = pause.Arg("name", "short name of the podcast to pause").Required().String()
+
+	unpause = kingpin.Command("unpause", "pause downloading of a podcast")
+	unpauseName = unpause.Arg("name", "short name of the podcast to unpause").Required().String()
 )
 
 func main() {
@@ -36,5 +45,11 @@ func main() {
 		listCmd(db)
 	case "sub":
 		subscribeCmd(db)
+	case "unsub":
+		unsubscribeCmd(db)
+	case "pause":
+		pauseUnpauseCmd(db, *pauseName, false)
+	case "unpause":
+		pauseUnpauseCmd(db, *unpauseName, true)
 	}
 }

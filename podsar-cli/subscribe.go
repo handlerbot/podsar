@@ -122,7 +122,7 @@ func subscribeCmd(db *lib.PodsarDb) {
 		log.Fatal("Error saving ignored episodes:", err)
 	}
 
-	if err := db.PutFeedState(id, true); err != nil {
+	if err := db.PutFeedState(feed, true); err != nil {
 		log.Fatal("Error unpausing feed after creation:", err)
 	}
 }
