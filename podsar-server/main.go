@@ -16,7 +16,7 @@ import (
 
 var (
 	bwLimitStr = flag.String("bwlimit", "0", "limit podcast downloads to this many bytes per second, e.g. 500000, 256KB, 512KiB, 1MB, 3MiB (case insensitive)")
-	dbfile     = flag.String("dbfile", "podsar.db", "filename of our sqlite3 database")
+	dbfn       = flag.String("db", "podsar.db", "filename of our sqlite3 database")
 	podcastDir = flag.String("podcast-dir", "", "base of directory tree to store downloaded podcasts in")
 	tempDir    = flag.String("temp-dir", "", "temporary directory for in-flight downloads; if not set, defaults to \"(podcast-dir)/.podsar-tmp\". MUST BE ON THE SAME FILESYSTEM AS --storage-base!")
 )
@@ -52,9 +52,10 @@ func main() {
 		fmt.Printf("Limiting download bandwidth to %s bytes per second (%s)\n", humanize.Comma(bwLimit), humanize.IBytes(uint64(bwLimit)))
 	}
 
-	db := new(lib.PodsarDb)
-	if err := db.Open(*dbfile); err != nil {
-		log.Fatal(err)
+	db, err := lib.NewPodsarDb(*dbfn)
+	if err != nil {
+		fmt.Printf("Error opening database \"%s\": %s\n", *dbfn, err)
+		os.Exit(1)
 	}
 	defer db.Close()
 

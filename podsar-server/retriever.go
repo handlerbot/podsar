@@ -41,7 +41,7 @@ func retrieve(db *lib.PodsarDb, ch chan *retrieveRequest, cache *SeenEpisodesCac
 		case <-quit:
 			return
 		case req := <-ch:
-			feed, _ := db.GetFeed(req.feedId)
+			feed, _ := db.GetFeedById(req.feedId)
 			found := false
 
 			for _, enclosure := range req.entry.Enclosures {

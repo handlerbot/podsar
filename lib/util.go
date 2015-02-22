@@ -2,6 +2,7 @@ package lib
 
 import (
 	sql "database/sql"
+	"errors"
 	"path/filepath"
 )
 
@@ -15,7 +16,10 @@ func makeFeedFromRow(row scannableRow) (*Feed, error) {
 	var dirName sql.NullString
 	var active, rename bool
 	err := row.Scan(&id, &ourName, &feedName, &uri, &active, &dirName, &rename)
-	if err != nil {
+	switch {
+	case err == sql.ErrNoRows:
+		return nil, errors.New("no such feed found in database")
+	case err != nil:
 		return nil, err
 	}
 	return &Feed{id, ourName, feedName, uri, active, dirName.String, rename}, nil

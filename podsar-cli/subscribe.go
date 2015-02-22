@@ -30,7 +30,7 @@ func findAudioEnclosure(item *rss.Item) (*rss.Enclosure, bool) {
 	return nil, false
 }
 
-func subscribeCmd(db *lib.PodsarDb) {
+func subscribeCmd(db *lib.PodsarDb) error {
 	handler := episodeHandler{}
 	scanner := rss.NewWithHandlers(15, false, nil, &handler)
 
@@ -104,7 +104,7 @@ func subscribeCmd(db *lib.PodsarDb) {
 	fmt.Printf("### Will mark %d entries as already seen\n", len(ignore))
 
 	if *dryRun {
-		return
+		return nil
 	}
 
 	id, err := db.PutFeed(feed)
@@ -122,7 +122,9 @@ func subscribeCmd(db *lib.PodsarDb) {
 		log.Fatal("Error saving ignored episodes:", err)
 	}
 
-	if err := db.PutFeedState(feed, true); err != nil {
+	if err := db.SetFeedActive(feed, true); err != nil {
 		log.Fatal("Error unpausing feed after creation:", err)
 	}
+
+	return nil
 }

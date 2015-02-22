@@ -64,7 +64,7 @@ func pollFeeds(db *lib.PodsarDb, retrieverCh chan *retrieveRequest, cache *SeenE
 	feedScanners := make(map[lib.ScannerKey]*rss.Feed)
 
 	for {
-		if feeds, err := db.GetFeeds(true); err != nil {
+		if feeds, err := db.GetAllFeeds(true); err != nil {
 			fmt.Println("Error getting list of feeds from database:", err)
 		} else {
 			for _, feed := range feeds {

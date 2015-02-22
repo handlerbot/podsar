@@ -31,7 +31,7 @@ func (p *PodsarDb) DeleteFeed(f *Feed) error {
 	return err
 }
 
-func (p *PodsarDb) PutFeedState(f *Feed, active bool) error {
+func (p *PodsarDb) SetFeedActive(f *Feed, active bool) error {
 	_, err := p.db.Exec("UPDATE feeds SET active = ? WHERE id = ?;", fakeBool(active), f.Id)
 	return err
 }
@@ -67,4 +67,3 @@ func (p *PodsarDb) GetAllFeeds(activeOnly bool) ([]*Feed, error) {
 	}
 	return feeds, nil
 }
-
