@@ -1,5 +1,9 @@
 package lib
 
+import (
+	"errors"
+)
+
 func fakeBool(x bool) int {
 	if x {
 		return 1
@@ -7,63 +11,64 @@ func fakeBool(x bool) int {
 	return 0
 }
 
-func (p *PodsarDb) PutFeed(f *Feed) (int, error) {
-	_, err := p.db.Exec("INSERT INTO feeds(our_name, feed_name, uri, active, dir_name, rename_episodes_to_title) "+
+func (p *PodsarDb) PutFeed(f *Feed) (id int, err error) {
+	if _, err = p.db.Exec("INSERT INTO feeds(our_name, feed_name, uri, active, dir_name, rename_episodes_to_title) "+
 		"VALUES (?, ?, ?, ?, ?, ?);", f.OurName, f.FeedName, f.Uri, fakeBool(f.Active), f.DirName,
-		f.RenameEpisodesToTitle)
-	if err != nil {
-		return -1, nil
+		f.RenameEpisodesToTitle); err != nil {
+		return -1, errors.New("insert: " + err.Error())
 	}
-
 	row := p.db.QueryRow("SELECT id FROM feeds WHERE our_name = ?;", f.OurName)
-	var id int
-	if err := row.Scan(&id); err != nil {
-		return -1, err
+	if err = row.Scan(&id); err != nil {
+		return -1, errors.New("select: " + err.Error())
 	}
 	return id, nil
 }
 
-func (p *PodsarDb) DeleteFeed(f *Feed) error {
-	if err := p.DeleteAllEpisodes(f); err != nil {
-		return err
+func (p *PodsarDb) DeleteFeed(f *Feed) (err error) {
+	if err = p.DeleteAllEpisodes(f); err != nil {
+		return errors.New("deleting episodes: " + err.Error())
 	}
-	_, err := p.db.Exec("DELETE FROM feeds WHERE id = ?;", f.Id)
-	return err
+	if _, err = p.db.Exec("DELETE FROM feeds WHERE id = ?;", f.Id); err != nil {
+		return errors.New("deleting feed:" + err.Error())
+	}
+	return
 }
 
-func (p *PodsarDb) SetFeedActive(f *Feed, active bool) error {
-	_, err := p.db.Exec("UPDATE feeds SET active = ? WHERE id = ?;", fakeBool(active), f.Id)
-	return err
+func (p *PodsarDb) SetFeedActive(f *Feed, active bool) (err error) {
+	_, err = p.db.Exec("UPDATE feeds SET active = ? WHERE id = ?;", fakeBool(active), f.Id)
+	return
 }
+
+const (
+	getFeedSQL = "SELECT id, our_name, feed_name, uri, active, dir_name, rename_episodes_to_title FROM feeds"
+)
 
 func (p *PodsarDb) GetFeedById(id int) (*Feed, error) {
-	row := p.db.QueryRow("SELECT id, our_name, feed_name, uri, active, dir_name, rename_episodes_to_title FROM feeds WHERE id = ?;", id)
+	row := p.db.QueryRow(getFeedSQL+" WHERE id = ?;", id)
 	return makeFeedFromRow(row)
 }
 
 func (p *PodsarDb) GetFeedByName(name string) (*Feed, error) {
-	row := p.db.QueryRow("SELECT id, our_name, feed_name, uri, active, dir_name, rename_episodes_to_title FROM feeds WHERE our_name = ?;", name)
+	row := p.db.QueryRow(getFeedSQL+" WHERE our_name = ?;", name)
 	return makeFeedFromRow(row)
 }
 
-func (p *PodsarDb) GetAllFeeds(activeOnly bool) ([]*Feed, error) {
-	rows, err := p.db.Query("SELECT id, our_name, feed_name, uri, active, dir_name, rename_episodes_to_title FROM feeds;")
+func (p *PodsarDb) GetAllFeeds(activeOnly bool) (feeds []*Feed, err error) {
+	rows, err := p.db.Query(getFeedSQL + ";")
 	if err != nil {
-		return nil, err
+		return nil, errors.New("select: " + err.Error())
 	}
 	defer rows.Close()
 
-	feeds := []*Feed{}
-
 	for rows.Next() {
-		feed, err := makeFeedFromRow(rows)
+		f, err := makeFeedFromRow(rows)
 		if err != nil {
-			return nil, err
+			return nil, errors.New("scan: " + err.Error())
 		}
-		if activeOnly && !feed.Active {
+		if activeOnly && !f.Active {
 			continue
 		}
-		feeds = append(feeds, feed)
+		feeds = append(feeds, f)
 	}
 	return feeds, nil
 }

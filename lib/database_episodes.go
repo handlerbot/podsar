@@ -1,65 +1,63 @@
 package lib
 
 import (
+	"errors"
 	"time"
 )
 
-func (p *PodsarDb) PutEpisode(feedId int, title, guid string, timestamp int64) error {
-	_, err := p.db.Exec("INSERT INTO episodes(feed_id, title, guid, pub_timestamp) VALUES (?, ?, ?, ?);", feedId, title, guid, timestamp)
-	return err
+func (p *PodsarDb) PutEpisode(id int, title, guid string, timestamp int64) (err error) {
+	_, err = p.db.Exec("INSERT INTO episodes(feed_id, title, guid, pub_timestamp) VALUES (?, ?, ?, ?);", id, title, guid, timestamp)
+	return
 }
 
-func (p *PodsarDb) PutEpisodes(episodes []*Episode) error {
+func (p *PodsarDb) PutEpisodes(eps []*Episode) (err error) {
 	tx, err := p.db.Begin()
 	if err != nil {
-		return err
+		return errors.New("begin transaction: " + err.Error())
 	}
 	stmt, err := tx.Prepare("INSERT INTO episodes(feed_id, title, guid, pub_timestamp) VALUES (?, ?, ?, ?);")
 	if err != nil {
-		return err
+		return errors.New("prepare: " + err.Error())
 	}
 	defer stmt.Close()
-	for _, e := range episodes {
-		_, err = stmt.Exec(e.FeedId, e.Title, e.Guid, e.PubDate.Unix())
-		if err != nil {
-			return err
+	for _, e := range eps {
+		if _, err = stmt.Exec(e.FeedId, e.Title, e.Guid, e.PubDate.Unix()); err != nil {
+			return errors.New("execute: " + err.Error())
 		}
 	}
-	tx.Commit()
-	return nil
+	if err = tx.Commit(); err != nil {
+		return errors.New("commit: " + err.Error())
+	}
+	return
 }
 
-func (p *PodsarDb) DeleteAllEpisodes(f *Feed) error {
-	_, err := p.db.Exec("DELETE FROM episodes WHERE feed_id = ?;", f.Id)
-	return err
+func (p *PodsarDb) DeleteAllEpisodes(f *Feed) (err error) {
+	_, err = p.db.Exec("DELETE FROM episodes WHERE feed_id = ?;", f.Id)
+	return
 }
 
-func (p *PodsarDb) GetAllEpisodes(feedId int) ([]*Episode, error) {
-	rows, err := p.db.Query("SELECT title, guid, pub_timestamp FROM episodes WHERE feed_id = ?;", feedId)
+func (p *PodsarDb) GetAllEpisodes(id int) (eps []*Episode, err error) {
+	rows, err := p.db.Query("SELECT title, guid, pub_timestamp FROM episodes WHERE feed_id = ?;", id)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("select: " + err.Error())
 	}
 	defer rows.Close()
 
-	episodes := []*Episode{}
-
 	for rows.Next() {
 		var title, guid string
-		var pubTimestamp int64
-		err := rows.Scan(&title, &guid, &pubTimestamp)
-		if err != nil {
-			return nil, err
+		var pubTime int64
+		if err = rows.Scan(&title, &guid, &pubTime); err != nil {
+			return nil, errors.New("scan: " + err.Error())
 		}
-		episodes = append(episodes, &Episode{feedId, title, guid, time.Unix(pubTimestamp, 0)})
+		eps = append(eps, &Episode{id, title, guid, time.Unix(pubTime, 0)})
 	}
-	return episodes, nil
+	return
 }
 
-func (p *PodsarDb) GetEpisodeCount(feedId int) (int, error) {
-	row := p.db.QueryRow("SELECT count(*) FROM episodes WHERE feed_id = ?;", feedId)
-	var c int
-	if err := row.Scan(&c); err != nil {
+func (p *PodsarDb) GetEpisodeCount(id int) (c int, err error) {
+	row := p.db.QueryRow("SELECT count(*) FROM episodes WHERE feed_id = ?;", id)
+	if err = row.Scan(&c); err != nil {
 		return -1, err
 	}
-	return c, nil
+	return
 }

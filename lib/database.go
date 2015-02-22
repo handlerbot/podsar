@@ -18,7 +18,7 @@ func NewPodsarDb(fn string) (p *PodsarDb, err error) {
 	}
 	p = new(PodsarDb)
 	if p.db, err = sql.Open("sqlite3", fn); err != nil {
-		return nil, err
+		return nil, errors.New("error opening database: " + err.Error())
 	}
 	return p, nil
 }

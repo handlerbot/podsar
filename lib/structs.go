@@ -22,15 +22,15 @@ type Feed struct {
 	RenameEpisodesToTitle bool
 }
 
-func (f *Feed) SummarizeOptions() (a []string) {
+func (f *Feed) SummarizeOptions() (opts []string) {
 	if !f.Active {
-		a = append(a, "paused")
+		opts = append(opts, "paused")
 	}
 	if len(f.DirName) > 0 {
-		a = append(a, fmt.Sprintf("directory \"%s\"", f.DirName))
+		opts = append(opts, fmt.Sprintf("directory \"%s\"", f.DirName))
 	}
 	if f.RenameEpisodesToTitle {
-		a = append(a, "rename to title")
+		opts = append(opts, "rename to title")
 	}
 	return
 }
