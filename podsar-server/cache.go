@@ -38,7 +38,7 @@ func (c *SeenEpisodesCache) Flusher(trigger chan os.Signal) {
 func (c *SeenEpisodesCache) getFeedSeenMap(feedId int) (map[string]int, error) {
 	seen, ok := c.cache[feedId]
 	if !ok {
-		if episodes, err := c.db.GetEpisodes(feedId); err != nil {
+		if episodes, err := c.db.GetAllEpisodes(feedId); err != nil {
 			return nil, errors.New(fmt.Sprintf("Error retrieving already seen episodes for feed id %d from database: %s", feedId, err))
 		} else {
 			seen := make(map[string]int)

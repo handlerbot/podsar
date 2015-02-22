@@ -17,27 +17,12 @@ func listCmd(db *lib.PodsarDb) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("*", printFeed(*f, c))
+		s := fmt.Sprintf("* \"%s\" [%s]: %d saved episodes", f.FeedName, f.OurName, c)
+		opts := f.SummarizeOptions()
+		if len(opts) > 0 {
+			s += fmt.Sprintf(" (%s)", strings.Join(opts, ", "))
+		}
+		fmt.Println(s)
 	}
 	return nil
-}
-
-func printFeed(f lib.Feed, count int) string {
-	s := fmt.Sprintf("[%s] %s: %d known episodes", f.OurName, f.FeedName, count)
-
-	a := make([]string, 0)
-	if !f.Active {
-		a = append(a, "paused")
-	}
-	if len(f.DirName) > 0 {
-		a = append(a, fmt.Sprintf("directory \"%s\"", f.DirName))
-	}
-	if f.RenameEpisodesToTitle {
-		a = append(a, "rename to title")
-	}
-	if len(a) > 0 {
-		s += fmt.Sprintf(" (%s)", strings.Join(a, ", "))
-	}
-
-	return s
 }

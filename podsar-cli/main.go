@@ -14,6 +14,9 @@ var (
 
 	list = kingpin.Command("list", "list all podcasts")
 
+	show     = kingpin.Command("show", "show all information about one podcast")
+	showName = show.Arg("name", "short name of the podcast to view").Required().String()
+
 	subscribe = kingpin.Command("sub", "subscribe to a podcast")
 	dryRun    = subscribe.Flag("dry-run", "if set, don't write anything to the database, just print").Bool()
 	dirName   = subscribe.Flag("dir", "directory inside podcast root for this podcast; default is the short name given for the podcast").String()
@@ -28,8 +31,8 @@ var (
 	pause     = kingpin.Command("pause", "pause downloading of a podcast")
 	pauseName = pause.Arg("name", "short name of the podcast to pause").Required().String()
 
-	unpause     = kingpin.Command("unpause", "pause downloading of a podcast")
-	unpauseName = unpause.Arg("name", "short name of the podcast to unpause").Required().String()
+	resume     = kingpin.Command("resume", "resume downloading of a podcast")
+	resumeName = resume.Arg("name", "short name of the podcast to resume").Required().String()
 )
 
 func main() {
@@ -45,14 +48,16 @@ func main() {
 	switch cmd {
 	case "list":
 		err = listCmd(db)
+	case "show":
+		err = showCmd(db)
 	case "sub":
 		err = subscribeCmd(db)
 	case "unsub":
 		err = unsubscribeCmd(db)
 	case "pause":
 		err = setActiveCmd(db, *pauseName, false)
-	case "unpause":
-		err = setActiveCmd(db, *unpauseName, true)
+	case "resume":
+		err = setActiveCmd(db, *resumeName, true)
 	}
 
 	if err != nil {

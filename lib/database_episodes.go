@@ -34,7 +34,7 @@ func (p *PodsarDb) DeleteAllEpisodes(f *Feed) error {
 	return err
 }
 
-func (p *PodsarDb) GetEpisodes(feedId int) ([]*Episode, error) {
+func (p *PodsarDb) GetAllEpisodes(feedId int) ([]*Episode, error) {
 	rows, err := p.db.Query("SELECT title, guid, pub_timestamp FROM episodes WHERE feed_id = ?;", feedId)
 	if err != nil {
 		return nil, err
