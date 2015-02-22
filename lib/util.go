@@ -25,32 +25,26 @@ func makeFeedFromRow(row scannableRow) (*Feed, error) {
 	return &Feed{id, ourName, feedName, uri, active, dirName.String, rename}, nil
 }
 
-func AssembleDest(srcUrl string, title string, dirPrefix string, feed *Feed) (string, string) {
-	urlFilename := filepath.Base(srcUrl) // eeek
+func FinalDirAndFn(url string, title string, prefix string, f *Feed) (finalDir, finalDirAndFn string) {
+	var dir, fn string
 
-	var feedDir, destFilename string
-
-	if feed.DirName != "" {
-		feedDir = feed.DirName
+	if f.RenameEpisodesToTitle {
+		fn = title + ".mp3"
 	} else {
-		feedDir = feed.OurName
+		fn = filepath.Base(url) // eeek
 	}
 
-	if feed.RenameEpisodesToTitle {
-		destFilename = title + ".mp3"
+	if f.DirName != "" {
+		dir = f.DirName
 	} else {
-		destFilename = urlFilename
+		dir = f.OurName
 	}
 
-	var p, f string
-
-	if len(dirPrefix) > 0 {
-		p = filepath.Join(dirPrefix, feedDir)
+	if len(prefix) > 0 {
+		finalDir = filepath.Join(prefix, dir)
 	} else {
-		p = feedDir
+		finalDir = dir
 	}
-
-	f = filepath.Join(p, destFilename)
-
-	return p, f
+	finalDirAndFn = filepath.Join(finalDir, fn)
+	return
 }

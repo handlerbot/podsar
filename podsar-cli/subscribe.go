@@ -49,7 +49,7 @@ func subscribeCmd(db *lib.PodsarDb) error {
 
 	for _, item := range handler.items {
 		if e, ok := findAudioEnclosure(item); ok {
-			_, fp := lib.AssembleDest(e.Url, item.Title, "", feed)
+			_, fp := lib.FinalDirAndFn(e.Url, item.Title, "", feed)
 			fmt.Printf("### Example downloaded filename: \"%s\"\n", fp)
 			break
 		}
@@ -82,7 +82,7 @@ func subscribeCmd(db *lib.PodsarDb) error {
 				if len(handler.items[i].Title) > maxlen {
 					maxlen = len(handler.items[i].Title) + 2
 				}
-				_, fp := lib.AssembleDest(e.Url, handler.items[i].Title, "", feed)
+				_, fp := lib.FinalDirAndFn(e.Url, handler.items[i].Title, "", feed)
 				lines = append(lines, [2]string{"\"" + handler.items[i].Title + "\"", fp})
 				c++
 			} else {
