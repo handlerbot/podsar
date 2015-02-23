@@ -3,6 +3,8 @@ package lib
 import (
 	sql "database/sql"
 	"errors"
+	"fmt"
+	"net/url"
 	"path/filepath"
 )
 
@@ -25,18 +27,20 @@ func makeFeedFromRow(row scannableRow) (*Feed, error) {
 	return &Feed{id, ourName, feedName, uri, active, dirName.String, rename}, nil
 }
 
-func FinalDirAndFn(url string, title string, prefix string, f *Feed) (finalDir, finalDirAndFn string) {
-	var dir, fn string
+func DirAndFilename(itemUrl string, title string, prefix string, f *Feed) (dir, fn string, err error) {
 	if f.RenameEpisodesToTitle {
 		fn = title + ".mp3"
 	} else {
-		fn = filepath.Base(url) // eeek
+		u, err := url.Parse(itemUrl)
+		if err != nil {
+			return "", "", errors.New(fmt.Sprintf("unable to parse URL \"%s\": %s", itemUrl, err.Error()))
+		}
+		fn = filepath.Base(u.Path)
+		if fn == "." || fn == string(filepath.Separator) {
+			return "", "", errors.New(fmt.Sprintf("unable to extract filename from URL path \"%s\"", fn))
+		}
 	}
-	if len(prefix) > 0 {
-		finalDir = filepath.Join(prefix, f.DirName)
-	} else {
-		finalDir = dir
-	}
-	finalDirAndFn = filepath.Join(finalDir, fn)
+	dir = filepath.Join(prefix, f.DirName)
+	fn = filepath.Join(dir, fn)
 	return
 }

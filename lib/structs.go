@@ -26,7 +26,7 @@ func (f *Feed) SummarizeOptions() (opts []string) {
 	if !f.Active {
 		opts = append(opts, "paused")
 	}
-	if len(f.DirName) > 0 {
+	if f.DirName != f.OurName {
 		opts = append(opts, fmt.Sprintf("directory \"%s\"", f.DirName))
 	}
 	if f.RenameEpisodesToTitle {

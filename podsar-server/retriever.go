@@ -55,7 +55,10 @@ func retrieve(db *lib.PodsarDb, ch chan *retrieveRequest, cache *SeenEpisodesCac
 					}
 					defer tempFile.Close()
 
-					destDir, destFilepath := lib.FinalDirAndFn(enclosure.Url, req.entry.Title, finalDir, feed)
+					destDir, destFilepath, err := lib.DirAndFilename(enclosure.Url, req.entry.Title, finalDir, feed)
+					if err != nil {
+						fmt.Println("Error calculating output filename: " + err.Error())
+					}
 					if err := os.MkdirAll(destDir, 0755); err != nil {
 						fmt.Printf("Error making destination directory \"%s\": %s\n", destDir, err)
 						break

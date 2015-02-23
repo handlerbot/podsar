@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -44,21 +43,25 @@ func subscribeCmd(db *lib.PodsarDb) (err error) {
 
 	for _, i := range resp.items {
 		if e, ok := findAudio(i); ok {
-			_, fn := lib.FinalDirAndFn(e.Url, i.Title, "", f)
+			_, fn, err := lib.DirAndFilename(e.Url, i.Title, "", f)
+			if err != nil {
+				return errors.New("sample download filename generation: " + err.Error())
+			}
 			fmt.Printf("Sample download filename: \"%s\"\n", fn)
 			break
 		}
 	}
 
-	printAllEpisodes(resp.items)
-
 	var ignore []*rss.Item
 	if *limit > 0 {
-		ignore = selectAndPrintEpisodes(resp.items, f)
+		if ignore, err = selectAndPrintEpisodes(resp.items, f); err != nil {
+			return errors.New("selecting and printing downloadable episodes: " + err.Error())
+		}
 	} else {
 		ignore = resp.items
 	}
-	fmt.Printf("Will mark %d entries as already seen\n", len(ignore))
+	fmt.Printf("Will mark %d entries as already seen:\n", len(ignore))
+	printEpisodes(ignore)
 
 	if *dryrun {
 		fmt.Println("Dry run mode: exiting without updating database")
@@ -99,27 +102,23 @@ func subscribeCmd(db *lib.PodsarDb) (err error) {
 	return nil
 }
 
-func printAllEpisodes(items []*rss.Item) {
-	fmt.Printf("\nFound %d entries:\n", len(items))
+func printEpisodes(items []*rss.Item) {
 	lines := make([][2]string, 0)
 	for _, i := range items {
-		pubDate := "unknown publication date"
-		if t, err := i.ParsedPubDate(); err == nil {
-			pubDate = t.Format("2006-01-02 at 15:04 AM -0700")
-		} else {
-			pubDate = "unparseable publication date"
-		}
-		lines = append(lines, [2]string{"\"" + i.Title + "\"", "(" + pubDate + ")"})
+		lines = append(lines, [2]string{"\"" + i.Title + "\"", "(" + pubDateAsString(i) + ")"})
 	}
 	prettyPrint(lines)
 }
 
-func selectAndPrintEpisodes(items []*rss.Item, f *lib.Feed) (ignore []*rss.Item) {
+func selectAndPrintEpisodes(items []*rss.Item, f *lib.Feed) (ignore []*rss.Item, err error) {
 	i, lines := 0, make([][2]string, 0)
 	for c := 0; c < *limit && i < len(items); i++ {
 		if e, ok := findAudio(items[i]); ok {
-			_, fp := lib.FinalDirAndFn(e.Url, items[i].Title, "", f)
-			lines = append(lines, [2]string{"\"" + items[i].Title + "\"", "=> \"" + filepath.Join("<podcast root>", fp) + "\""})
+			_, fp, err := lib.DirAndFilename(e.Url, items[i].Title, "", f)
+			if err != nil {
+				return nil, errors.New("computing output filename: " + err.Error())
+			}
+			lines = append(lines, [2]string{"\"" + items[i].Title + "\"", "(" + pubDateAsString(items[i]) + ") -> \"" + fp + "\""})
 			c++
 		} else {
 			ignore = append(ignore, items[i])
@@ -129,11 +128,18 @@ func selectAndPrintEpisodes(items []*rss.Item, f *lib.Feed) (ignore []*rss.Item)
 		ignore = append(ignore, items[i:]...)
 	}
 	if len(lines) > 0 {
-		fmt.Printf("\nWill download the following entries:\n")
+		fmt.Printf("\nWill download %d entries:\n", len(lines))
 		prettyPrint(lines)
 		fmt.Println()
 	}
 	return
+}
+
+func pubDateAsString(item *rss.Item) string {
+	if t, err := item.ParsedPubDate(); err == nil {
+		return t.Format("2006-01-02")
+	}
+	return "<unparseable>"
 }
 
 func prettyPrint(lines [][2]string) {
