@@ -8,6 +8,10 @@ import (
 	"path/filepath"
 )
 
+var (
+	ErrNoMatchingFeed = errors.New("no such feed found in database")
+)
+
 type scannableRow interface {
 	Scan(...interface{}) error
 }
@@ -20,7 +24,7 @@ func makeFeedFromRow(row scannableRow) (*Feed, error) {
 	err := row.Scan(&id, &ourName, &feedName, &uri, &active, &dirName, &rename)
 	switch {
 	case err == sql.ErrNoRows:
-		return nil, errors.New("no such feed found in database")
+		return nil, ErrNoMatchingFeed
 	case err != nil:
 		return nil, err
 	}

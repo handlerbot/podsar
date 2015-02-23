@@ -24,6 +24,16 @@ func (m *feedResponse) ProcessItems(feed *rss.Feed, channel *rss.Channel, items 
 }
 
 func subscribeCmd(db *lib.PodsarDb) (err error) {
+	_, err = db.GetFeedByName(*ourName)
+	switch err {
+	case lib.ErrNoMatchingFeed:
+		break
+	case nil:
+		return errors.New(fmt.Sprintf("short name \"%s\" already in use, please choose another", *ourName))
+	default:
+		return errors.New("checking short name: " + err.Error())
+	}
+
 	if *dirName == "" {
 		*dirName = *ourName
 	}
@@ -60,7 +70,7 @@ func subscribeCmd(db *lib.PodsarDb) (err error) {
 	} else {
 		ignore = resp.items
 	}
-	fmt.Printf("Will mark %d entries as already seen:\n", len(ignore))
+	fmt.Printf("\nWill mark %d entries as already seen:\n", len(ignore))
 	printEpisodes(ignore)
 
 	if *dryrun {
@@ -130,7 +140,6 @@ func selectAndPrintEpisodes(items []*rss.Item, f *lib.Feed) (ignore []*rss.Item,
 	if len(lines) > 0 {
 		fmt.Printf("\nWill download %d entries:\n", len(lines))
 		prettyPrint(lines)
-		fmt.Println()
 	}
 	return
 }
