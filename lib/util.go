@@ -27,21 +27,13 @@ func makeFeedFromRow(row scannableRow) (*Feed, error) {
 
 func FinalDirAndFn(url string, title string, prefix string, f *Feed) (finalDir, finalDirAndFn string) {
 	var dir, fn string
-
 	if f.RenameEpisodesToTitle {
 		fn = title + ".mp3"
 	} else {
 		fn = filepath.Base(url) // eeek
 	}
-
-	if f.DirName != "" {
-		dir = f.DirName
-	} else {
-		dir = f.OurName
-	}
-
 	if len(prefix) > 0 {
-		finalDir = filepath.Join(prefix, dir)
+		finalDir = filepath.Join(prefix, f.DirName)
 	} else {
 		finalDir = dir
 	}

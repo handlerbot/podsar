@@ -18,10 +18,10 @@ var (
 	showName = show.Arg("name", "short name of the podcast to view").Required().String()
 
 	subscribe = kingpin.Command("sub", "subscribe to a podcast")
-	dryRun    = subscribe.Flag("dry-run", "if set, don't write anything to the database, just print").Bool()
+	dryrun    = subscribe.Flag("dryrun", "if set, don't write anything to the database, just print").Bool()
 	dirName   = subscribe.Flag("dir", "directory inside podcast root for this podcast; default is the short name given for the podcast").String()
-	rename    = subscribe.Flag("rename-episodes", "create filename from the episode title, rather than using whatever the download URI specifies").Bool()
-	limit     = subscribe.Flag("episode-limit", "download this many episodes from the podcast when subscribing; 0 == none").Default("3").Int()
+	rename    = subscribe.Flag("rename", "create filename from the episode title, rather than using whatever the download URI specifies").Bool()
+	limit     = subscribe.Flag("limit", "download this many episodes from the podcast when subscribing; 0 == none, -1 == all").Default("3").Int()
 	ourName   = subscribe.Arg("name", "short name for this podcast").Required().String()
 	uri       = subscribe.Arg("uri", "URI for podcast feed").Required().URL()
 

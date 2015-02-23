@@ -4,7 +4,7 @@ CREATE TABLE feeds(
 	feed_name TEXT NOT NULL,
 	uri TEXT NOT NULL,
 	active INTEGER NOT NULL,
-	dir_name TEXT UNIQUE,
+	dir_name TEXT NOT NULL,
 	rename_episodes_to_title INTEGER NOT NULL
 );
 

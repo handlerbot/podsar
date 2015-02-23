@@ -1,130 +1,160 @@
 package main
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
-	"log"
+	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	rss "github.com/jteeuwen/go-pkg-rss"
 
 	"github.com/handlerbot/podsar/lib"
 )
 
-type episodeHandler struct {
+type feedResponse struct {
 	channel *rss.Channel
 	items   []*rss.Item
 }
 
-func (m *episodeHandler) ProcessItems(scanner *rss.Feed, rssChannel *rss.Channel, rssEntries []*rss.Item) {
-	m.channel = rssChannel
-	m.items = rssEntries
+func (m *feedResponse) ProcessItems(feed *rss.Feed, channel *rss.Channel, items []*rss.Item) {
+	m.channel = channel
+	m.items = items
 }
 
-func findAudioEnclosure(item *rss.Item) (*rss.Enclosure, bool) {
+func subscribeCmd(db *lib.PodsarDb) (err error) {
+	if *dirName == "" {
+		*dirName = *ourName
+	}
+
+	resp := new(feedResponse)
+	if err = rss.NewWithHandlers(15, false, nil, resp).Fetch((*(*uri)).String(), nil); err != nil {
+		return errors.New("fetch: " + err.Error())
+	}
+
+	if *limit < 0 {
+		*limit = len(resp.items)
+	}
+
+	f := &lib.Feed{0, *ourName, resp.channel.Title, (*(*uri)).String(), false, *dirName, *rename}
+
+	fmt.Printf("Podcast: \"%s\"\nShort name: \"%s\"\nDescription: \"%s\"\n", resp.channel.Title, f.OurName, resp.channel.Description)
+
+	for _, i := range resp.items {
+		if e, ok := findAudio(i); ok {
+			_, fn := lib.FinalDirAndFn(e.Url, i.Title, "", f)
+			fmt.Printf("Sample download filename: \"%s\"\n", fn)
+			break
+		}
+	}
+
+	printAllEpisodes(resp.items)
+
+	var ignore []*rss.Item
+	if *limit > 0 {
+		ignore = selectAndPrintEpisodes(resp.items, f)
+	} else {
+		ignore = resp.items
+	}
+	fmt.Printf("Will mark %d entries as already seen\n", len(ignore))
+
+	if *dryrun {
+		fmt.Println("Dry run mode: exiting without updating database")
+		return nil
+	}
+
+	fmt.Printf("\nIf this looks good, type y or yes and hit RETURN to proceed> ")
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Scan()
+	switch strings.ToLower(scanner.Text()) {
+	case "y", "yes":
+		break
+	default:
+		fmt.Println("Confirmation not found, exiting")
+		return nil
+	}
+
+	f.Id, err = db.PutFeed(f)
+	if err != nil {
+		return errors.New("saving feed: " + err.Error())
+	}
+
+	eps := make([]*lib.Episode, 0)
+	for _, i := range ignore {
+		t, _ := i.ParsedPubDate() // If we can't parse the publication date, default zero-value for time.Time is fine
+		eps = append(eps, &lib.Episode{f.Id, i.Title, *i.Guid, t})
+	}
+
+	if err = db.PutEpisodes(eps); err != nil {
+		return errors.New("saving episodes: " + err.Error())
+	}
+
+	if err = db.SetFeedActive(f, true); err != nil {
+		return errors.New("unpausing feed: " + err.Error())
+	}
+
+	fmt.Println("Subscribed to podcast")
+	return nil
+}
+
+func printAllEpisodes(items []*rss.Item) {
+	fmt.Printf("\nFound %d entries:\n", len(items))
+	lines := make([][2]string, 0)
+	for _, i := range items {
+		pubDate := "unknown publication date"
+		if t, err := i.ParsedPubDate(); err == nil {
+			pubDate = t.Format("2006-01-02 at 15:04 AM -0700")
+		} else {
+			pubDate = "unparseable publication date"
+		}
+		lines = append(lines, [2]string{"\"" + i.Title + "\"", "(" + pubDate + ")"})
+	}
+	prettyPrint(lines)
+}
+
+func selectAndPrintEpisodes(items []*rss.Item, f *lib.Feed) (ignore []*rss.Item) {
+	i, lines := 0, make([][2]string, 0)
+	for c := 0; c < *limit && i < len(items); i++ {
+		if e, ok := findAudio(items[i]); ok {
+			_, fp := lib.FinalDirAndFn(e.Url, items[i].Title, "", f)
+			lines = append(lines, [2]string{"\"" + items[i].Title + "\"", "=> \"" + filepath.Join("<podcast root>", fp) + "\""})
+			c++
+		} else {
+			ignore = append(ignore, items[i])
+		}
+	}
+	if i < len(items) {
+		ignore = append(ignore, items[i:]...)
+	}
+	if len(lines) > 0 {
+		fmt.Printf("\nWill download the following entries:\n")
+		prettyPrint(lines)
+		fmt.Println()
+	}
+	return
+}
+
+func prettyPrint(lines [][2]string) {
+	titleMax := 0
+	for _, l := range lines {
+		thisLen := len(l[0])
+		if thisLen > titleMax {
+			titleMax = thisLen
+		}
+	}
+	numMax := len(strconv.Itoa(len(lines)))
+	for i, l := range lines {
+		fmt.Printf("%[1]*d) %-[3]*s  %s\n", numMax, i+1, titleMax, l[0], l[1])
+	}
+}
+
+func findAudio(item *rss.Item) (*rss.Enclosure, bool) {
 	for _, e := range item.Enclosures {
 		if e.Type == "audio/mpeg" {
 			return e, true
 		}
 	}
 	return nil, false
-}
-
-func subscribeCmd(db *lib.PodsarDb) error {
-	handler := episodeHandler{}
-	scanner := rss.NewWithHandlers(15, false, nil, &handler)
-
-	if err := scanner.Fetch((*(*uri)).String(), nil); err != nil {
-		log.Fatalf("Error fetching feed %s: %s\n", uri, err)
-	}
-
-	if *limit < 0 {
-		*limit = len(handler.items)
-	}
-
-	feed := &lib.Feed{0, *ourName, handler.channel.Title, (*(*uri)).String(), false, *dirName, *rename}
-	ignore := make([]*rss.Item, 0)
-
-	fmt.Printf("### Podcast: \"%s\" [%s]\n### Description: \"%s\"\n", handler.channel.Title, feed.OurName, handler.channel.Description)
-
-	for _, item := range handler.items {
-		if e, ok := findAudioEnclosure(item); ok {
-			_, fp := lib.FinalDirAndFn(e.Url, item.Title, "", feed)
-			fmt.Printf("### Example downloaded filename: \"%s\"\n", fp)
-			break
-		}
-	}
-
-	fmt.Printf("\n### Found %d entries:\n", len(handler.items))
-	maxlen := 0
-	lines := make([][2]string, 0)
-	for _, item := range handler.items {
-		if len(item.Title)+2 > maxlen {
-			maxlen = len(item.Title) + 2
-		}
-		pubDate := "unknown/unparseable publication date"
-		if t, err := item.ParsedPubDate(); err == nil {
-			pubDate = t.Format("2006-01-02 at 15:04 AM -0700")
-		}
-		lines = append(lines, [2]string{"\"" + item.Title + "\"", pubDate})
-	}
-	iWidth := len(strconv.Itoa(len(lines)))
-	for i, line := range lines {
-		fmt.Printf("%[1]*d) %-[3]*s  (published %s)\n", iWidth, i+1, maxlen, line[0], line[1])
-	}
-
-	if *limit > 0 {
-		fmt.Printf("\n### Will download the following entries:\n")
-		i, maxlen := 0, 0
-		lines := make([][2]string, 0)
-		for c := 0; c < *limit && i < len(handler.items); i++ {
-			if e, ok := findAudioEnclosure(handler.items[i]); ok {
-				if len(handler.items[i].Title) > maxlen {
-					maxlen = len(handler.items[i].Title) + 2
-				}
-				_, fp := lib.FinalDirAndFn(e.Url, handler.items[i].Title, "", feed)
-				lines = append(lines, [2]string{"\"" + handler.items[i].Title + "\"", fp})
-				c++
-			} else {
-				ignore = append(ignore, handler.items[i])
-			}
-		}
-		if i < len(handler.items) {
-			ignore = append(ignore, handler.items[i:]...)
-		}
-		iWidth := len(strconv.Itoa(len(lines)))
-		for i, line := range lines {
-			fmt.Printf("%[1]*d) %-[3]*s  => file \"%s\"\n", iWidth, i+1, maxlen, line[0], filepath.Join("<podcast root>", line[1]))
-		}
-		fmt.Println()
-	} else {
-		ignore = handler.items
-	}
-
-	fmt.Printf("### Will mark %d entries as already seen\n", len(ignore))
-
-	if *dryRun {
-		return nil
-	}
-
-	id, err := db.PutFeed(feed)
-	if err != nil {
-		log.Fatal("Error saving feed:", err)
-	}
-
-	episodes := make([]*lib.Episode, 0)
-	for _, i := range ignore {
-		t, _ := i.ParsedPubDate() // If we can't parse the publication date, default zero-value for time.Time is fine
-		episodes = append(episodes, &lib.Episode{id, i.Title, *i.Guid, t})
-	}
-
-	if err := db.PutEpisodes(episodes); err != nil {
-		log.Fatal("Error saving ignored episodes:", err)
-	}
-
-	if err := db.SetFeedActive(feed, true); err != nil {
-		log.Fatal("Error unpausing feed after creation:", err)
-	}
-
-	return nil
 }
