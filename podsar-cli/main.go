@@ -15,6 +15,7 @@ var (
 	list = kingpin.Command("list", "list all podcasts")
 
 	show     = kingpin.Command("show", "show all information about one podcast")
+	guid     = show.Flag("guid", "if set, also show each episodes' GUID").Bool()
 	showName = show.Arg("name", "short name of the podcast to view").Required().String()
 
 	subscribe = kingpin.Command("sub", "subscribe to a podcast")

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	rss "github.com/jteeuwen/go-pkg-rss"
@@ -64,7 +63,7 @@ func subscribeCmd(db *lib.PodsarDb) (err error) {
 
 	var ignore []*rss.Item
 	if *limit > 0 {
-		if ignore, err = selectAndPrintEpisodes(resp.items, f); err != nil {
+		if ignore, err = findAndPrintDownloads(resp.items, f); err != nil {
 			return errors.New("selecting and printing downloadable episodes: " + err.Error())
 		}
 	} else {
@@ -108,7 +107,7 @@ func subscribeCmd(db *lib.PodsarDb) (err error) {
 		return errors.New("unpausing feed: " + err.Error())
 	}
 
-	fmt.Println("Subscribed to podcast")
+	fmt.Println("Subscribed to podcast!")
 	return nil
 }
 
@@ -120,7 +119,7 @@ func printEpisodes(items []*rss.Item) {
 	prettyPrint(lines)
 }
 
-func selectAndPrintEpisodes(items []*rss.Item, f *lib.Feed) (ignore []*rss.Item, err error) {
+func findAndPrintDownloads(items []*rss.Item, f *lib.Feed) (ignore []*rss.Item, err error) {
 	i, lines := 0, make([][2]string, 0)
 	for c := 0; c < *limit && i < len(items); i++ {
 		if e, ok := findAudio(items[i]); ok {
@@ -149,20 +148,6 @@ func pubDateAsString(item *rss.Item) string {
 		return t.Format("2006-01-02")
 	}
 	return "<unparseable>"
-}
-
-func prettyPrint(lines [][2]string) {
-	titleMax := 0
-	for _, l := range lines {
-		thisLen := len(l[0])
-		if thisLen > titleMax {
-			titleMax = thisLen
-		}
-	}
-	numMax := len(strconv.Itoa(len(lines)))
-	for i, l := range lines {
-		fmt.Printf("%[1]*d) %-[3]*s  %s\n", numMax, i+1, titleMax, l[0], l[1])
-	}
 }
 
 func findAudio(item *rss.Item) (*rss.Enclosure, bool) {

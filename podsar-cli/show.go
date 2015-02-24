@@ -26,14 +26,19 @@ func showCmd(db *lib.PodsarDb) (err error) {
 	}
 
 	if c > 0 {
-		eps := make([]*lib.Episode, 0)
+		var eps []*lib.Episode
 		if eps, err = db.GetAllEpisodes(f.Id); err != nil {
 			return
 		}
 		fmt.Printf("\nEpisodes:\n")
-		for i, e := range eps {
-			fmt.Printf("%d) \"%s\"\n", i+1, e.Title)
+		g, lines := "", make([][2]string, 0)
+		for _, e := range eps {
+			if *guid {
+				g = fmt.Sprintf(" GUID <%s>", e.Guid)
+			}
+			lines = append(lines, [2]string{"\"" + e.Title + "\"", g})
 		}
+		prettyPrint(lines)
 	}
 
 	return

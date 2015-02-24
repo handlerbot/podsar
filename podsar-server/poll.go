@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"sync"
 	"time"
@@ -19,13 +20,12 @@ var (
 
 type episodeHandler struct {
 	db        *lib.PodsarDb
-	cache     *SeenEpisodesCache
+	cache     *guidCache
 	retriever chan *retrieveRequest
 	feedId    int
 }
 
 func (m *episodeHandler) ProcessItems(scanner *rss.Feed, rssChannel *rss.Channel, rssEntries []*rss.Item) {
-	fmt.Println("Processing for feed", m.feedId)
 	for _, entry := range rssEntries {
 		found, err := m.cache.Seen(m.feedId, *entry.Guid)
 		if err != nil {
@@ -38,7 +38,7 @@ func (m *episodeHandler) ProcessItems(scanner *rss.Feed, rssChannel *rss.Channel
 	}
 }
 
-func pollFeeds(db *lib.PodsarDb, retrieverCh chan *retrieveRequest, cache *SeenEpisodesCache, trigger chan os.Signal, quit chan struct{}, wg *sync.WaitGroup) {
+func pollFeeds(db *lib.PodsarDb, ch chan *retrieveRequest, cache *guidCache, trigger chan os.Signal, quit chan struct{}, wg *sync.WaitGroup) {
 	wg.Add(1)
 	defer wg.Done()
 
@@ -50,7 +50,7 @@ func pollFeeds(db *lib.PodsarDb, retrieverCh chan *retrieveRequest, cache *SeenE
 				return false
 			case s := <-trigger:
 				if triggerOK {
-					fmt.Printf("Received %s signal, triggering immediate poll\n", s)
+					log.Printf("Received %s signal, triggering immediate poll\n", s)
 					return false
 				}
 			case <-quit:
@@ -65,19 +65,19 @@ func pollFeeds(db *lib.PodsarDb, retrieverCh chan *retrieveRequest, cache *SeenE
 
 	for {
 		if feeds, err := db.GetAllFeeds(true); err != nil {
-			fmt.Println("Error getting list of feeds from database:", err)
+			log.Println("Error getting list of feeds from database:", err)
 		} else {
 			for _, feed := range feeds {
 				key := lib.ScannerKey{feed.Id, feed.Uri}
 				if _, ok := feedScanners[key]; !ok {
-					feedScanners[key] = rss.NewWithHandlers(*feedFetchTimeout, true, nil, &episodeHandler{db, cache, retrieverCh, feed.Id})
+					feedScanners[key] = rss.NewWithHandlers(*feedFetchTimeout, true, nil, &episodeHandler{db, cache, ch, feed.Id})
 				}
 				scanner := feedScanners[key]
 				if !scanner.CanUpdate() {
 					// TODO: debug log here?
 				} else {
 					if err := scanner.Fetch(feed.Uri, nil); err != nil {
-						fmt.Printf("Error fetching feed %s (%s): %s\n", feed.OurName, feed.Uri, err)
+						log.Printf("Error fetching feed %s (%s): %s\n", feed.OurName, feed.Uri, err)
 					}
 				}
 				if pauseMaybeDone(midPoll, false) {
@@ -85,7 +85,6 @@ func pollFeeds(db *lib.PodsarDb, retrieverCh chan *retrieveRequest, cache *SeenE
 				}
 			}
 		}
-		fmt.Println("Poller sleeping")
 		if pauseMaybeDone(betweenPolls, true) {
 			return
 		}

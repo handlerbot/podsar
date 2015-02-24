@@ -3,74 +3,75 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"sync"
 
 	"github.com/handlerbot/podsar/lib"
 )
 
-type SeenEpisodesCache struct {
+type guidCache struct {
 	db    *lib.PodsarDb
 	cache map[int]map[string]int
 	sync.Mutex
 }
 
-func NewSeenEpisodesCache(db *lib.PodsarDb) *SeenEpisodesCache {
-	c := SeenEpisodesCache{}
+func NewGuidCache(db *lib.PodsarDb, ch *chan os.Signal) *guidCache {
+	c := guidCache{}
 	c.db = db
 	c.cache = make(map[int]map[string]int)
-
+	if ch != nil {
+		go func() {
+			for true {
+				select {
+				case s := <-*ch:
+					c.Lock()
+					log.Printf("Received %s signal, flushing seen episodes cache\n", s)
+					c.cache = make(map[int]map[string]int)
+					c.Unlock()
+				}
+			}
+		}()
+	}
 	return &c
 }
 
-func (c *SeenEpisodesCache) Flusher(trigger chan os.Signal) {
-	for {
-		select {
-		case s := <-trigger:
-			c.Lock()
-			fmt.Printf("Received %s signal, flushing seen episodes cache\n", s)
-			c.cache = make(map[int]map[string]int)
-			c.Unlock()
+func (c *guidCache) getMapForFeed(id int) (map[string]int, error) {
+	m, ok := c.cache[id]
+	if !ok {
+		if eps, err := c.db.GetAllEpisodes(id); err != nil {
+			return nil, errors.New(fmt.Sprintf("loading seen episodes for feed id %d: %s", id, err))
+		} else {
+			m := make(map[string]int)
+			for _, e := range eps {
+				m[e.Guid] = 1
+			}
+			return m, nil
 		}
 	}
+	return m, nil
 }
 
-func (c *SeenEpisodesCache) getFeedSeenMap(feedId int) (map[string]int, error) {
-	seen, ok := c.cache[feedId]
-	if !ok {
-		if episodes, err := c.db.GetAllEpisodes(feedId); err != nil {
-			return nil, errors.New(fmt.Sprintf("Error retrieving already seen episodes for feed id %d from database: %s", feedId, err))
-		} else {
-			seen := make(map[string]int)
-			for _, e := range episodes {
-				seen[e.Guid] = 1
-			}
-			return seen, nil
-		}
+func (c *guidCache) Seen(id int, guid string) (seen bool, err error) {
+	c.Lock()
+	defer c.Unlock()
+
+	m, err := c.getMapForFeed(id)
+	if err != nil {
+		return false, err
 	}
+	_, seen = m[guid]
 	return seen, nil
 }
 
-func (c *SeenEpisodesCache) Seen(feedId int, guid string) (bool, error) {
+func (c *guidCache) MarkSeen(id int, guid string) (err error) {
 	c.Lock()
 	defer c.Unlock()
 
-	if seen, err := c.getFeedSeenMap(feedId); err != nil {
-		return false, err
-	} else {
-		_, found := seen[guid]
-		return found, nil
-	}
-}
-
-func (c *SeenEpisodesCache) MarkSeen(feedId int, guid string) error {
-	c.Lock()
-	defer c.Unlock()
-
-	if seen, err := c.getFeedSeenMap(feedId); err != nil {
+	m, err := c.getMapForFeed(id)
+	if err != nil {
 		return err
-	} else {
-		seen[guid] = 1
-		return nil
 	}
+	m[guid] = 1
+	return
 }

@@ -8,11 +8,11 @@ import (
 )
 
 func listCmd(db *lib.PodsarDb) error {
-	all, err := db.GetAllFeeds(false)
+	feeds, err := db.GetAllFeeds(false)
 	if err != nil {
 		return err
 	}
-	for _, f := range all {
+	for _, f := range feeds {
 		c, err := db.GetEpisodeCount(f.Id)
 		if err != nil {
 			return err

@@ -15,70 +15,71 @@ import (
 )
 
 var (
-	bwLimitStr = flag.String("bwlimit", "0", "limit podcast downloads to this many bytes per second, e.g. 500000, 256KB, 512KiB, 1MB, 3MiB (case insensitive)")
-	dbfn       = flag.String("db", "podsar.db", "filename of our sqlite3 database")
-	podcastDir = flag.String("podcast-dir", "", "base of directory tree to store downloaded podcasts in")
-	tempDir    = flag.String("temp-dir", "", "temporary directory for in-flight downloads; if not set, defaults to \"(podcast-dir)/.podsar-tmp\". MUST BE ON THE SAME FILESYSTEM AS --storage-base!")
+	limitStr = flag.String("bwlimit", "0", "limit podcast downloads to this many bytes per second, e.g. 500000, 256KB, 512KiB, 1MB, 3MiB (case insensitive)")
+	dbfn     = flag.String("db", "podsar.db", "filename of our sqlite3 database")
+	dir      = flag.String("dir", "", "base of directory tree to store downloaded podcasts in")
+	temp     = flag.String("temp", "", "temporary directory for in-flight downloads; if not set, defaults to \"(dir)/.podsar-tmp\". MUST BE ON THE SAME FILESYSTEM AS --storage-base!")
 )
 
 func main() {
 	flag.Parse()
 
-	if *podcastDir == "" {
-		log.Fatal("Base podcast directory must be set via --podcast-dir")
+	if *dir == "" {
+		bail("base podcast directory must be set via --dir\n")
 	}
 
-	if *tempDir == "" {
-		*tempDir = fmt.Sprintf("%s/.podsar-tmp", *podcastDir)
-		fmt.Println("Using temporary directory", *tempDir)
+	if *temp == "" {
+		*temp = fmt.Sprintf("%s/.podsar-tmp", *dir)
+		log.Println("Using temporary directory", *temp)
 	}
 
-	if err := os.MkdirAll(*podcastDir, 0755); err != nil {
-		log.Fatalf("Error creating podcast directory \"%s\": %s\n", *podcastDir, err)
+	if err := os.MkdirAll(*dir, 0755); err != nil {
+		bail("error creating podcast directory \"%s\": %s\n", *dir, err)
 	}
 
-	if err := os.MkdirAll(*tempDir, 0755); err != nil {
-		log.Fatalf("Error creating temporary directory \"%s\": %s\n", *tempDir, err)
-	}
-
-	var bwLimit int64
-	x, err := humanize.ParseBytes(*bwLimitStr)
-	if err != nil {
-		log.Fatal(err)
-	} else {
-		bwLimit = int64(x)
-	}
-	if bwLimit > 0 {
-		fmt.Printf("Limiting download bandwidth to %s bytes per second (%s)\n", humanize.Comma(bwLimit), humanize.IBytes(uint64(bwLimit)))
+	if err := os.MkdirAll(*temp, 0755); err != nil {
+		bail("error creating temporary directory \"%s\": %s\n", *temp, err)
 	}
 
 	db, err := lib.NewPodsarDb(*dbfn)
 	if err != nil {
-		fmt.Printf("Error opening database \"%s\": %s\n", *dbfn, err)
-		os.Exit(1)
+		bail(fmt.Sprintf("error opening database \"%s\": %s\n", *dbfn, err))
 	}
 	defer db.Close()
 
-	seenCache := NewSeenEpisodesCache(db)
+	var limit int64
+	if x, err := humanize.ParseBytes(*limitStr); err != nil {
+		bail(err.Error())
+	} else {
+		limit = int64(x)
+	}
+	if limit > 0 {
+		log.Printf("Limiting download bandwidth to %s bytes per second (%s)\n", humanize.Comma(limit), humanize.IBytes(uint64(limit)))
+	}
 
 	var wg sync.WaitGroup
-	alarmTrigger, hupTrigger := make(chan os.Signal, 1), make(chan os.Signal, 1)
-	retrieverCh := make(chan *retrieveRequest, 100)
+	ch := make(chan *retrieveRequest, 100)
+	alarm, hup := make(chan os.Signal, 1), make(chan os.Signal, 1)
 	quit := make(chan struct{})
 
-	go seenCache.Flusher(hupTrigger)
-	go pollFeeds(db, retrieverCh, seenCache, alarmTrigger, quit, &wg)
-	go retrieve(db, retrieverCh, seenCache, *podcastDir, *tempDir, bwLimit, quit, &wg)
+	cache := NewGuidCache(db, &hup)
 
-	signal.Notify(alarmTrigger, syscall.SIGALRM)
-	signal.Notify(hupTrigger, syscall.SIGHUP)
+	go pollFeeds(db, ch, cache, alarm, quit, &wg)
+	go retrieve(db, ch, cache, *dir, *temp, limit, quit, &wg)
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, os.Kill, syscall.SIGTERM)
-	s := <-c
+	signal.Notify(alarm, syscall.SIGALRM)
+	signal.Notify(hup, syscall.SIGHUP)
 
-	fmt.Printf("Received %s signal, beginning shutdown... ", s)
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, os.Kill, syscall.SIGTERM)
+	log.Printf("Received %s signal, beginning shutdown...\n", <-stop)
+
 	close(quit)
 	wg.Wait()
-	fmt.Println("done.")
+	log.Println("Shutdown complete")
+}
+
+func bail(s string, m ...interface{}) {
+	fmt.Printf("FATAL: "+s, m...)
+	os.Exit(1)
 }
