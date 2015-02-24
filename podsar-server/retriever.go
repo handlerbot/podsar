@@ -1,12 +1,12 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
-	"sync"
 
 	rss "github.com/jteeuwen/go-pkg-rss"
 	"github.com/mxk/go-flowrate/flowrate"
@@ -14,84 +14,68 @@ import (
 	"github.com/handlerbot/podsar/lib"
 )
 
-type retrieveRequest struct {
-	feedId int
-	entry  *rss.Item
+type audioRetriever struct {
+	db        *lib.PodsarDb
+	cache     *guidCache
+	dir, temp string
+	bwLimit   int64
 }
 
-func markDone(db *lib.PodsarDb, cache *guidCache, f *lib.Feed, req *retrieveRequest) bool {
-	t, _ := req.entry.ParsedPubDate()
-	if err := db.PutEpisode(req.feedId, req.entry.Title, *req.entry.Guid, t.Unix()); err != nil {
-		log.Printf("Error saving episode \"%s\" for feed \"%s\"\n", req.entry.Title, f.OurName)
-		return false
-	}
-	if err := cache.MarkSeen(req.feedId, *req.entry.Guid); err != nil {
-		log.Printf("Error marking as read episode \"%s\" for feed \"%s\"\n", req.entry.Title, f.OurName)
-		return false
-	}
-	return true
+func newAudioRetriever(db *lib.PodsarDb, cache *guidCache, dir, temp string, bwLimit int64) *audioRetriever {
+	return &audioRetriever{db, cache, dir, temp, bwLimit}
 }
 
-func retrieve(db *lib.PodsarDb, ch chan *retrieveRequest, cache *guidCache, finalDir string, tempDir string, bwlimit int64, quit chan struct{}, wg *sync.WaitGroup) {
-	wg.Add(1)
-	defer wg.Done()
-
-	for {
-		select {
-		case <-quit:
-			return
-		case req := <-ch:
-			feed, _ := db.GetFeedById(req.feedId)
-			found := false
-
-			for _, enclosure := range req.entry.Enclosures {
-				if enclosure.Type == "audio/mpeg" {
-					found = true
-
-					tempFile, err := ioutil.TempFile(tempDir, "")
-					if err != nil {
-						log.Printf("Error creating temporary file in %s: %s\n", tempDir, err)
-						break
-					}
-					defer tempFile.Close()
-
-					destDir, destFilepath, err := lib.DirAndFilename(enclosure.Url, req.entry.Title, finalDir, feed)
-					if err != nil {
-						log.Println("Error calculating output filename: ", err)
-						break
-					}
-					if err := os.MkdirAll(destDir, 0755); err != nil {
-						log.Printf("Error making destination directory \"%s\": %s\n", destDir, err)
-						break
-					}
-
-					resp, err := http.Get(enclosure.Url)
-					if err != nil {
-						log.Println("Error retrieving podcast:", enclosure.Url, err)
-						break
-					}
-					defer resp.Body.Close()
-
-					_, err = io.Copy(tempFile, flowrate.NewReader(resp.Body, bwlimit))
-					if err != nil {
-						log.Printf("Error saving podcast URL \"%s\" to temporary file \"%s\": %s", enclosure.Url, tempFile.Name(), err)
-						break
-					}
-
-					if err := os.Rename(tempFile.Name(), destFilepath); err != nil {
-						log.Printf("Error renaming \"%s\" to \"%s\": %s", tempFile.Name(), destFilepath, err)
-						break
-					}
-
-					log.Printf("Downloaded \"%s\" (\"%s\")\n", req.entry.Title, feed.FeedName)
-					_ = markDone(db, cache, feed, req)
-					break
-				}
-			}
-
-			if !found {
-				_ = markDone(db, cache, feed, req)
-			}
-		}
+func (r *audioRetriever) Download(id int, item *rss.Item) error {
+	f, err := r.db.GetFeedById(id)
+	if err != nil {
+		return errors.New("looking up feed:" + err.Error())
 	}
+
+	e, ok := lib.FindAudio(item)
+	if !ok {
+		return r.markDone(f, item)
+	}
+
+	tempFile, err := ioutil.TempFile(r.temp, "")
+	if err != nil {
+		return errors.New("creating temporary file: " + err.Error())
+	}
+	defer tempFile.Close()
+
+	dir, fn, err := lib.DirAndFilename(e.Url, item.Title, r.dir, f)
+	if err != nil {
+		return errors.New("calculating output filename: " + err.Error())
+	}
+
+	if err = os.MkdirAll(dir, 0755); err != nil {
+		return errors.New("making final directory \"%s\": " + err.Error())
+	}
+
+	resp, err := http.Get(e.Url)
+	if err != nil {
+		return errors.New("retrieving podcast: " + err.Error())
+	}
+	defer resp.Body.Close()
+
+	_, err = io.Copy(tempFile, flowrate.NewReader(resp.Body, r.bwLimit))
+	if err != nil {
+		return errors.New(fmt.Sprintf("copying \"%s\" to temporary file \"%s\": %s", e.Url, tempFile.Name(), err))
+	}
+
+	if err = os.Rename(tempFile.Name(), fn); err != nil {
+		return errors.New(fmt.Sprintf("renaming \"%s\" -> \"%s\": %s", tempFile.Name(), fn, err))
+	}
+
+	return r.markDone(f, item)
+}
+
+func (r *audioRetriever) markDone(f *lib.Feed, item *rss.Item) (err error) {
+	t, _ := item.ParsedPubDate()
+	if err = r.db.PutEpisode(f.Id, item.Title, *item.Guid, t.Unix()); err != nil {
+		return errors.New(fmt.Sprintf("saving episode \"%s\" (podcast \"%s\"): %s", item.Title, f.OurName, err.Error()))
+	}
+	if err = r.cache.MarkSeen(f.Id, *item.Guid); err != nil {
+		return errors.New(fmt.Sprintf("marking GUID \"%s\" (podcast \"%s\") as seen: %s", item.Title, f.OurName, err.Error()))
+	}
+	return
 }

@@ -16,40 +16,41 @@ type guidCache struct {
 	sync.Mutex
 }
 
-func NewGuidCache(db *lib.PodsarDb, ch *chan os.Signal) *guidCache {
+func newGuidCache(db *lib.PodsarDb) *guidCache {
 	c := guidCache{}
 	c.db = db
 	c.cache = make(map[int]map[string]int)
-	if ch != nil {
-		go func() {
-			for true {
-				select {
-				case s := <-*ch:
-					c.Lock()
-					log.Printf("Received %s signal, flushing seen episodes cache\n", s)
-					c.cache = make(map[int]map[string]int)
-					c.Unlock()
-				}
-			}
-		}()
-	}
 	return &c
+}
+
+func (c *guidCache) Flusher(ch chan os.Signal) {
+	for true {
+		select {
+		case s := <-ch:
+			c.Lock()
+			log.Printf("Received %s signal, flushing seen episodes cache\n", s)
+			c.cache = make(map[int]map[string]int)
+			c.Unlock()
+		}
+	}
 }
 
 func (c *guidCache) getMapForFeed(id int) (map[string]int, error) {
 	m, ok := c.cache[id]
-	if !ok {
-		if eps, err := c.db.GetAllEpisodes(id); err != nil {
-			return nil, errors.New(fmt.Sprintf("loading seen episodes for feed id %d: %s", id, err))
-		} else {
-			m := make(map[string]int)
-			for _, e := range eps {
-				m[e.Guid] = 1
-			}
-			return m, nil
-		}
+	if ok {
+		return m, nil
 	}
-	return m, nil
+
+	if eps, err := c.db.GetAllEpisodes(id); err != nil {
+		return nil, errors.New(fmt.Sprintf("loading seen episodes for feed id %d: %s", id, err))
+	} else {
+		m := make(map[string]int)
+		c.cache[id] = m
+		for _, e := range eps {
+			m[e.Guid] = 1
+		}
+		return m, nil
+	}
 }
 
 func (c *guidCache) Seen(id int, guid string) (seen bool, err error) {

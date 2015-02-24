@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+
+	rss "github.com/jteeuwen/go-pkg-rss"
 )
 
 var (
@@ -47,4 +49,13 @@ func DirAndFilename(itemUrl string, title string, prefix string, f *Feed) (dir, 
 	dir = filepath.Join(prefix, f.DirName)
 	fn = filepath.Join(dir, fn)
 	return
+}
+
+func FindAudio(item *rss.Item) (*rss.Enclosure, bool) {
+	for _, e := range item.Enclosures {
+		if e.Type == "audio/mpeg" {
+			return e, true
+		}
+	}
+	return nil, false
 }

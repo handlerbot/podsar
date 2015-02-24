@@ -51,7 +51,7 @@ func subscribeCmd(db *lib.PodsarDb) (err error) {
 	fmt.Printf("Podcast: \"%s\"\nShort name: \"%s\"\nDescription: \"%s\"\n", resp.channel.Title, f.OurName, resp.channel.Description)
 
 	for _, i := range resp.items {
-		if e, ok := findAudio(i); ok {
+		if e, ok := lib.FindAudio(i); ok {
 			_, fn, err := lib.DirAndFilename(e.Url, i.Title, "", f)
 			if err != nil {
 				return errors.New("sample download filename generation: " + err.Error())
@@ -122,7 +122,7 @@ func printEpisodes(items []*rss.Item) {
 func findAndPrintDownloads(items []*rss.Item, f *lib.Feed) (ignore []*rss.Item, err error) {
 	i, lines := 0, make([][2]string, 0)
 	for c := 0; c < *limit && i < len(items); i++ {
-		if e, ok := findAudio(items[i]); ok {
+		if e, ok := lib.FindAudio(items[i]); ok {
 			_, fp, err := lib.DirAndFilename(e.Url, items[i].Title, "", f)
 			if err != nil {
 				return nil, errors.New("computing output filename: " + err.Error())
@@ -148,13 +148,4 @@ func pubDateAsString(item *rss.Item) string {
 		return t.Format("2006-01-02")
 	}
 	return "<unparseable>"
-}
-
-func findAudio(item *rss.Item) (*rss.Enclosure, bool) {
-	for _, e := range item.Enclosures {
-		if e.Type == "audio/mpeg" {
-			return e, true
-		}
-	}
-	return nil, false
 }
